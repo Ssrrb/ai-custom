@@ -144,6 +144,7 @@ export async function POST(request: Request) {
       messages: [
         {
           chatId: id,
+          userId: session.user.id,
           id: message.id,
           role: 'user',
           parts: message.parts,
@@ -194,49 +195,63 @@ export async function POST(request: Request) {
         );
 
         console.log('DEBUG: Original uiMessages length:', uiMessages.length);
-        
+
         // Create strictly typed valid messages conforming to what convertToModelMessages expects
         const validatedMessages = uiMessages
-          .filter(msg => msg && typeof msg.role === 'string') // Filter out undefined or malformed messages
-          .map(msg => {
+          .filter((msg) => msg && typeof msg.role === 'string') // Filter out undefined or malformed messages
+          .map((msg) => {
             const role = msg.role as 'user' | 'assistant' | 'system';
-            
+
             // Ensure all parts have valid type and content properties
-            const validParts = Array.isArray(msg.parts) ? msg.parts
-              .filter(part => part && typeof part === 'object')
-              .map(part => {
-                // Ensure part is of type 'text' with valid text content
-                if (!part.type || typeof part.type !== 'string') {
-                  console.log(`DEBUG: Adding missing type to part in message ${msg.id}`);
-                  return { type: 'text' as const, text: 'Empty content' };
-                } else if (part.type === 'text') {
-                  // For text parts, ensure they have valid text content
-                  const textPart = part as { type: 'text', text?: unknown };
-                  if (!textPart.text || typeof textPart.text !== 'string') {
-                    console.log(`DEBUG: Fixing invalid text content in message ${msg.id}`);
-                    return { type: 'text' as const, text: 'Empty content' };
-                  }
-                }
-                
-                // Return the part as is if it has valid type and content
-                return part;
-              }) : [];
-              
+            const validParts = Array.isArray(msg.parts)
+              ? msg.parts
+                  .filter((part) => part && typeof part === 'object')
+                  .map((part) => {
+                    // Ensure part is of type 'text' with valid text content
+                    if (!part.type || typeof part.type !== 'string') {
+                      console.log(
+                        `DEBUG: Adding missing type to part in message ${msg.id}`,
+                      );
+                      return { type: 'text' as const, text: 'Empty content' };
+                    } else if (part.type === 'text') {
+                      // For text parts, ensure they have valid text content
+                      const textPart = part as { type: 'text'; text?: unknown };
+                      if (!textPart.text || typeof textPart.text !== 'string') {
+                        console.log(
+                          `DEBUG: Fixing invalid text content in message ${msg.id}`,
+                        );
+                        return { type: 'text' as const, text: 'Empty content' };
+                      }
+                    }
+
+                    // Return the part as is if it has valid type and content
+                    return part;
+                  })
+              : [];
+
             // If no valid parts, create a default text part
             if (validParts.length === 0) {
-              console.log(`DEBUG: Creating default text part for message ${msg.id}`);
+              console.log(
+                `DEBUG: Creating default text part for message ${msg.id}`,
+              );
               validParts.push({ type: 'text' as const, text: 'No content' });
             }
-            
+
             return {
               role,
               id: msg.id,
-              parts: validParts
+              parts: validParts,
             };
           });
-          
-        console.log('DEBUG: Validated messages ready for conversion, count:', validatedMessages.length);
-        console.log('DEBUG: First validated message:', JSON.stringify(validatedMessages[0], null, 2));
+
+        console.log(
+          'DEBUG: Validated messages ready for conversion, count:',
+          validatedMessages.length,
+        );
+        console.log(
+          'DEBUG: First validated message:',
+          JSON.stringify(validatedMessages[0], null, 2),
+        );
 
         const result = streamText({
           model: model, // Use the resolved model
@@ -283,6 +298,7 @@ export async function POST(request: Request) {
         await saveMessages({
           messages: messages.map((message) => ({
             id: message.id,
+            userId: session.user.id,
             role: message.role,
             parts: message.parts,
             createdAt: new Date(),
@@ -292,7 +308,7 @@ export async function POST(request: Request) {
         });
       },
     });
-    
+
     const streamContext = getStreamContext();
     if (streamContext) {
       return new Response(
@@ -337,7 +353,7 @@ export async function DELETE(request: Request) {
   }
 
   const chat = await getChatById({ id });
-  
+
   if (!chat) {
     console.error('DEBUG: Not found - Chat does not exist.');
     return new ChatSDKError('not_found:chat').toResponse();
