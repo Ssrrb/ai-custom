@@ -12,6 +12,7 @@ import {
   createStreamId,
   deleteChatById,
   getChatById,
+  getOrCreateUser,
   getMessageCountByUserId,
   getMessagesByChatId,
   saveChat,
@@ -105,6 +106,12 @@ export async function POST(request: Request) {
     }
 
     console.log(`DEBUG: Authenticated user: ${session.user.id}`);
+
+    await getOrCreateUser({
+      id: session.user.id,
+      email: session.user.email,
+    });
+
     const userType: UserType = session.user.type;
 
     const messageCount = await getMessageCountByUserId({

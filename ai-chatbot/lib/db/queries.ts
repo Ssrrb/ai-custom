@@ -54,21 +54,25 @@ export async function getUser(email: string): Promise<Array<User>> {
 }
 
 export async function createUser(email: string, password: string) {
+  const id = generateUUID();
   const hashedPassword = generateHashedPassword(password);
 
   try {
-    return await db.insert(user).values({ email, password: hashedPassword });
+    return await db
+      .insert(user)
+      .values({ id, email, password: hashedPassword });
   } catch (error) {
     throw new ChatSDKError('bad_request:database', 'Failed to create user');
   }
 }
 
 export async function createGuestUser() {
+  const id = generateUUID();
   const email = `guest-${Date.now()}`;
   const password = generateHashedPassword(generateUUID());
 
   try {
-    return await db.insert(user).values({ email, password }).returning({
+    return await db.insert(user).values({ id, email, password }).returning({
       id: user.id,
       email: user.email,
     });
@@ -76,6 +80,50 @@ export async function createGuestUser() {
     throw new ChatSDKError(
       'bad_request:database',
       'Failed to create guest user',
+    );
+  }
+}
+
+export async function getUserById(id: string): Promise<User | undefined> {
+  try {
+    const [foundUser] = await db.select().from(user).where(eq(user.id, id));
+    return foundUser;
+  } catch (error) {
+    throw new ChatSDKError('bad_request:database', 'Failed to get user by id');
+  }
+}
+
+export async function getOrCreateUser(userData: {
+  id: string;
+  email?: string | null;
+}) {
+  try {
+    const existingUser = await getUserById(userData.id);
+
+    if (existingUser) {
+      return existingUser;
+    }
+
+    if (!userData.email) {
+      throw new ChatSDKError(
+        'bad_request:auth',
+        'User email is missing from session.',
+      );
+    }
+
+    const [newUser] = await db
+      .insert(user)
+      .values({ id: userData.id, email: userData.email })
+      .returning();
+
+    console.log(`DEBUG: Created new user with id: ${newUser.id}`);
+    return newUser;
+  } catch (error) {
+    console.error('DEBUG: Raw error in getOrCreateUser:', error);
+    if (error instanceof ChatSDKError) throw error;
+    throw new ChatSDKError(
+      'bad_request:database',
+      'Failed to get or create user',
     );
   }
 }
@@ -92,6 +140,7 @@ export async function saveChat({
   visibility: VisibilityType;
 }) {
   try {
+    console.log(`DEBUG: Saving chat with id: ${id}, userId: ${userId}`);
     return await db.insert(chat).values({
       id,
       createdAt: new Date(),
@@ -100,6 +149,7 @@ export async function saveChat({
       visibility,
     });
   } catch (error) {
+    console.error('DEBUG: Raw error in saveChat:', error);
     throw new ChatSDKError('bad_request:database', 'Failed to save chat');
   }
 }
@@ -116,6 +166,7 @@ export async function deleteChatById({ id }: { id: string }) {
       .returning();
     return chatsDeleted;
   } catch (error) {
+    console.error('DEBUG: Raw error in deleteChatById:', error);
     throw new ChatSDKError(
       'bad_request:database',
       'Failed to delete chat by id',
@@ -228,6 +279,7 @@ export async function getMessagesByChatId({ id }: { id: string }) {
       .where(eq(message.chatId, id))
       .orderBy(asc(message.createdAt));
   } catch (error) {
+    console.error('DEBUG: Raw error in getMessagesByChatId:', error);
     throw new ChatSDKError(
       'bad_request:database',
       'Failed to get messages by chat id',
