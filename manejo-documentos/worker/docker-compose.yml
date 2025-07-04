@@ -1,0 +1,12 @@
+version: "3.8"
+services:
+  worker:
+    build: .
+    volumes:
+      - ./secrets:/secrets/google:ro
+      - ../files:/manejo-documentos/files
+    environment:
+      - GOOGLE_APPLICATION_CREDENTIALS=/secrets/google/analisis-de-licitaciones-mopc-ee344fd58049.json
+      - GCLOUD_PROJECT=analisis-de-licitaciones-mopc
+      - SUBSCRIPTION_ID=chatbot_documents-sub
+    restart: unless-stopped
