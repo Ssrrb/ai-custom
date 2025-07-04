@@ -74,17 +74,26 @@ export async function POST(request: Request) {
   }
 
   try {
-    const {
+    let {
       id,
       message,
       selectedChatModel,
       selectedVisibilityType,
     }: {
       id: string;
-      message: ChatMessage;
+      message?: ChatMessage;
       selectedChatModel: ChatModel['id'];
       selectedVisibilityType: VisibilityType;
     } = requestBody;
+
+    // Provide a default message if one wasn't provided
+    if (!message) {
+      message = {
+        id: generateUUID(),
+        role: 'user',
+        parts: [{ type: 'text', text: 'Comienza una nueva conversación' }],
+      } as ChatMessage;
+    }
 
     console.log('DEBUG: Request body parsed:', { id, selectedChatModel });
 

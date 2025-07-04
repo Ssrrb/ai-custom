@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type {
   LanguageModelV2,
   LanguageModelV2CallWarning,
@@ -62,12 +63,15 @@ export class CustomChatLanguageModel implements LanguageModelV2 {
     const warnings: LanguageModelV2CallWarning[] = [];
 
     const messages = options.prompt
-      .map(promptMessage => {
+      .map((promptMessage) => {
         if (promptMessage.role === 'system') {
           return { role: 'system', content: promptMessage.content };
         }
 
-        if (promptMessage.role === 'user' || promptMessage.role === 'assistant') {
+        if (
+          promptMessage.role === 'user' ||
+          promptMessage.role === 'assistant'
+        ) {
           if (Array.isArray(promptMessage.content)) {
             const content = promptMessage.content.reduce((acc, part) => {
               if (part.type === 'text') {
@@ -82,15 +86,30 @@ export class CustomChatLanguageModel implements LanguageModelV2 {
       })
       .filter(Boolean);
 
+    // Extract userMessage from prompt
+    const userMessage = options.prompt.find((p) => p.role === 'user');
+
+    if (!userMessage) {
+      throw new Error('No user message found in the prompt');
+    }
+
     const body = {
-      messages,
-      model: this.modelId,
+      chatId: options.providerOptions?.custom?.chatId || randomUUID(),
       stream: false,
-      user_id: (options.providerOptions?.['custom-rag-provider'] as { user?: string })?.user,
+      user_id: (
+        options.providerOptions?.['custom-rag-provider'] as { user?: string }
+      )?.user,
+      model: this.modelId,
       temperature: options.temperature,
       max_tokens: options.maxOutputTokens,
+      message: {
+        id: options.providerOptions?.custom?.messageId || randomUUID(),
+        role: 'user',
+        parts: userMessage.content,
+        attachments: [],
+        createdAt: new Date(),
+      },
     };
-
     return { args: body, warnings };
   }
 
@@ -113,7 +132,7 @@ export class CustomChatLanguageModel implements LanguageModelV2 {
         body,
         failedResponseHandler: createJsonErrorResponseHandler({
           errorSchema: customErrorResponseSchema,
-          errorToMessage: data => data.error.message,
+          errorToMessage: (data) => data.error.message,
         }),
         successfulResponseHandler: createJsonResponseHandler(
           customChatResponseSchema,
@@ -131,11 +150,16 @@ export class CustomChatLanguageModel implements LanguageModelV2 {
       const finishReason: LanguageModelV2FinishReason = (() => {
         const reason = choice.finish_reason || 'stop';
         switch (reason) {
-          case 'stop': return 'stop';
-          case 'length': return 'length';
-          case 'content_filter': return 'content-filter';
-          case 'tool_calls': return 'tool-calls';
-          default: return 'unknown';
+          case 'stop':
+            return 'stop';
+          case 'length':
+            return 'length';
+          case 'content_filter':
+            return 'content-filter';
+          case 'tool_calls':
+            return 'tool-calls';
+          default:
+            return 'unknown';
         }
       })();
 
@@ -145,25 +169,35 @@ export class CustomChatLanguageModel implements LanguageModelV2 {
         usage: {
           inputTokens: response.usage.prompt_tokens,
           outputTokens: response.usage.completion_tokens,
-          totalTokens: response.usage.total_tokens || 
-            (response.usage.prompt_tokens + response.usage.completion_tokens),
+          totalTokens:
+            response.usage.total_tokens ||
+            response.usage.prompt_tokens + response.usage.completion_tokens,
         },
         warnings,
       };
     } catch (error: unknown) {
       // In development environment, provide a mock response if backend is unavailable
-      if (process.env.NODE_ENV === 'development' && 
-          error instanceof Error && 
-          error.toString().includes('ECONNREFUSED')) {
-        console.warn('Backend unavailable. Returning mock response for development.');
-        
+      if (
+        process.env.NODE_ENV === 'development' &&
+        error instanceof Error &&
+        error.toString().includes('ECONNREFUSED')
+      ) {
+        console.warn(
+          'Backend unavailable. Returning mock response for development.',
+        );
+
         const mockWarning: LanguageModelV2CallWarning = {
           type: 'other',
           message: 'Using mock response in development mode',
         };
-        
+
         return {
-          content: [{ type: 'text' as const, text: 'This is a mock response because the backend is not available. Please start the backend server or check the connection.' }],
+          content: [
+            {
+              type: 'text' as const,
+              text: 'This is a mock response because the backend is not available. Please start the backend server or check the connection.',
+            },
+          ],
           finishReason: 'stop',
           usage: {
             inputTokens: 10,
@@ -183,7 +217,8 @@ export class CustomChatLanguageModel implements LanguageModelV2 {
     console.warn(
       'Streaming not implemented for custom provider, falling back to generate.',
     );
-    const { content, finishReason, usage, warnings } = await this.doGenerate(options);
+    const { content, finishReason, usage, warnings } =
+      await this.doGenerate(options);
 
     const stream = new ReadableStream<LanguageModelV2StreamPart>({
       start(controller) {

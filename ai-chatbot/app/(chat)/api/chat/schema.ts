@@ -20,13 +20,13 @@ export const postRequestBodySchema = z.object({
     id: z.string().uuid(),
     role: z.enum(['user']),
     parts: z.array(partSchema),
-  }),
+  }).optional(),
   selectedChatModel: z.enum([
     'chat-model',
     'chat-model-reasoning',
     'rag-pipeline-v1',
-  ]),
-  selectedVisibilityType: z.enum(['public', 'private']),
+  ]).default('rag-pipeline-v1'),
+  selectedVisibilityType: z.enum(['public', 'private']).default('private'),
 });
 
 export type PostRequestBody = z.infer<typeof postRequestBodySchema>;

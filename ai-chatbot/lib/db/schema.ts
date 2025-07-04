@@ -40,6 +40,9 @@ export const messageDeprecated = pgTable('Message', {
   chatId: uuid('chatId')
     .notNull()
     .references(() => chat.id),
+  userId: uuid('userId')
+    .notNull()
+    .references(() => user.id),
   role: varchar('role').notNull(),
   content: json('content').notNull(),
   createdAt: timestamp('createdAt').notNull(),
@@ -52,6 +55,9 @@ export const message = pgTable('Message_v2', {
   chatId: uuid('chatId')
     .notNull()
     .references(() => chat.id),
+  userId: uuid('userId')
+    .notNull()
+    .references(() => user.id),
   role: varchar('role').notNull(),
   parts: json('parts').notNull(),
   attachments: json('attachments').notNull(),
